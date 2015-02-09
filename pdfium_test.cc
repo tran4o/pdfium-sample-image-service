@@ -2,7 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <io.h>
+
+#include <list>
+#include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -10,6 +13,15 @@
 #include "../fpdfsdk/include/fpdf_ext.h"
 #include "../fpdfsdk/include/fpdfformfill.h"
 #include "../fpdfsdk/include/fpdftext.h"
+#include "../fpdfsdk/include/fpdfview.h"
+#include "../core/include/fxcrt/fx_system.h"
+#include "v8/include/v8.h"
+#include "v8/include/libplatform/libplatform.h"
+
+
+
+
+
 #include "LRU.h"
 
 #ifdef _WIN32
@@ -188,7 +200,7 @@ DocumentCacheEntry::DocumentCacheEntry(const char *filename) : pageCache(CACHED_
 	}
 	(void)FPDF_GetDocPermissions(doc);
 	(void)FPDFAvail_IsFormAvail(pdf_avail, &hints);
-	form = FPDFDOC_InitFormFillEnviroument(doc, &form_callbacks);
+	form = FPDFDOC_InitFormFillEnvironment(doc, &form_callbacks);
 	FPDF_SetFormFieldHighlightColor(form, 0, 0xFFE4DD);
 	FPDF_SetFormFieldHighlightAlpha(form, 100);
 	int first_page = FPDFAvail_GetFirstPageNum(doc);
@@ -213,7 +225,7 @@ DocumentCacheEntry::~DocumentCacheEntry() {
 		return;
 	fclose(f);
 	FORM_DoDocumentAAction(form, FPDFDOC_AACTION_WC);
-	FPDFDOC_ExitFormFillEnviroument(form);
+	FPDFDOC_ExitFormFillEnvironment(form);
 	FPDF_CloseDocument(doc);
 	FPDFAvail_Destroy(pdf_avail);
 }
@@ -481,7 +493,7 @@ int main(int argc, const char* argv[])
 #ifdef _WIN32
 	_setmode(_fileno(stdout), _O_BINARY);
 #endif
-	FPDF_InitLibrary(NULL);
+	FPDF_InitLibrary();
 	//64k read line bufer
 	bitmap = FPDFBitmap_Create(bWidth, bHeight, 1); // USE ALPHA
 	while (true)
