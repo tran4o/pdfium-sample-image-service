@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+//#define DOLOG
+
 #include "../fpdfsdk/include/fpdf_dataavail.h"
 #include "../fpdfsdk/include/fpdf_ext.h"
 #include "../fpdfsdk/include/fpdfformfill.h"
@@ -18,15 +20,12 @@
 #include "v8/include/v8.h"
 #include "v8/include/libplatform/libplatform.h"
 
-
-
-
-
-#include "LRU.h"
-
 #ifdef _WIN32
 #include <fcntl.h>
+#include<io.h>
 #endif
+
+#include "LRU.h"
 
 static const int CACHED_PAGES_PER_DOCUMENT = 3;  //5
 static const int CACHED_DOCUMENTS = 20; //20
@@ -39,6 +38,17 @@ static const int RasterCacheMB = 100;		//50MB cache for raster images
 #define SVG 1
 #define JPG 2
 #define PNG 3
+
+FILE *logFile = NULL;
+void log(std::string s) 
+{
+	if (logFile == NULL) 
+		logFile = fopen("c:\\t\\PDFIUM.LOG","w+");
+	else
+		logFile = fopen("c:\\t\\PDFIUM.LOG", "a");
+	fprintf(logFile, "%s", s.c_str());
+	fclose(logFile);
+}
 
 int getExt(std::string &name)
 {
@@ -253,6 +263,23 @@ std::string trim(std::string str) {
 	return trim_left_in_place(trim_right_in_place(str));
 }
 //-------------------------------------------------------------------------
+int flushwrite(const void *_buff,int size,FILE *f) {
+	const char *buff = (const char *)_buff;
+	int s=0;
+	while (true) {
+		int r = fwrite(buff+s, 1, size, f);
+		if (r <= 0) { if (s != 0) fflush(f); return s; }
+		s += r;
+		size -= r;
+		if (size <= 0) {
+			fflush(f);
+			return s;
+		}
+		
+	}
+	fflush(f);
+}
+//-------------------------------------------------------------------------
 LRUCache<std::string, DocumentCacheEntry*> documentCache(CACHED_DOCUMENTS, NULL);
 FPDF_BITMAP bitmap;
 char buff[65536];
@@ -263,30 +290,48 @@ char buff[65536];
 // NAME
 // PAGE
 bool info() {
-	if (!fgets(buff, 65536, stdin))
+
+	if (!fgets(buff, 65536, stdin)) {
+#ifdef DOLOG
+		log("INFO ERROR NAME\n");
+#endif
 		return false;
+	}
 	std::string name(buff);
-	name = trim(name);	
-	if (!fgets(buff, 65536, stdin))
+	name = trim(name);
+#ifdef DOLOG
+	log("INFO NAME " + name + "\n");
+#endif
+	if (!fgets(buff, 65536, stdin)) {
+#ifdef DOLOG
+		log("INFO ERROR PAGE\n");
+#endif
 		return false;
+	}
 	std::string spage(buff);
 	spage = trim(spage);
+#ifdef DOLOG
+	log("INFO PAGE " + spage + "\n");
+#endif
 	int page = (int)strtod(spage.c_str(), NULL);
-
 	DocumentCacheEntry *de = documentCache.get(name);
 	if (de == NULL)
 	{
 		de = new DocumentCacheEntry(name.c_str());
 		DocumentCacheEntry *t = documentCache.put(name, de);
-		if (t != NULL) {
+		if (t != NULL) 
+		{
 			delete t;
 		}
 	}		
 	char tmp[100];
 	if (page == -1) {
+		memset(tmp, 0, 100);
 		sprintf(tmp, "%d", FPDF_GetPageCount(de->doc));
-		fwrite((const void *)&tmp, 1, 100, stdout);
-		fflush(stdout);
+		flushwrite((const void *)&tmp, 100, stdout);
+		#ifdef DOLOG
+				log("INFO RESULT " + std::string(tmp) + "\n");
+		#endif
 		return true;
 	}
 	int w = 0;
@@ -304,9 +349,34 @@ bool info() {
 		w = (int)FPDF_GetPageWidth(pe->page);
 		h = (int)FPDF_GetPageHeight(pe->page);
 	}
-	sprintf(tmp,"%d %d", w, h);
-	fwrite((const void *)&tmp,1, 100,stdout);
-	fflush(stdout);
+	memset(tmp, 0, 100);
+	sprintf(tmp, "%d %d", w, h);
+	flushwrite((const void *)&tmp,100,stdout);
+	#ifdef DOLOG
+		log("INFO RESULT " + std::string(tmp) + "\n");
+	#endif
+	return true;
+}
+
+bool ping()
+{
+	if (!fgets(buff, 65536, stdin)) 
+	{
+#ifdef DOLOG
+		log("INFO ERROR PING\n");
+#endif
+		return false;
+	}
+	std::string num(buff);
+	num = trim(num);
+	char tmp[100];
+	memset(tmp, 0, 100);
+	sprintf(tmp, "PONG %s",num.c_str());
+	flushwrite((const void *)&tmp, 100, stdout);
+#ifdef DOLOG
+	log(tmp);
+	log("\n");
+#endif
 	return true;
 }
 //--------------------------------------------------------------------------------
@@ -405,8 +475,10 @@ bool render()
 			tmpBuff[c + 3] = buffer[ip + 2];
 		}
 	}
-	fwrite(tmpBuff, 4, bWidth*bHeight, stdout);
-	fflush(stdout);
+	flushwrite(tmpBuff, bWidth*bHeight*4, stdout);
+	#ifdef DOLOG
+	log("RENDER DONE " + std::to_string(bWidth*bHeight*4) + " BYTES SENT\n");
+	#endif
 	return true;
 }
 //--------------------------------------------------------------------------------
@@ -416,19 +488,40 @@ bool render()
 // height
 bool preview()
 {
-	if (!fgets(buff, 65536, stdin))
+	if (!fgets(buff, 65536, stdin)) {
+		#ifdef DOLOG
+				log("UNABLE TO DO PREVIEW NAME\n");
+		#endif
 		return false;
+	}
 	std::string name(buff);
 	name = trim(name);
-	if (!fgets(buff, 65536, stdin))
+#ifdef DOLOG
+	log("PRV NAME " + name + "\n");
+#endif
+	if (!fgets(buff, 65536, stdin)) {
+		#ifdef DOLOG
+				log("UNABLE TO DO PREVIEW WIDTH\n");
+		#endif
 		return false;
+	}
 	std::string swidth(buff);
 	swidth = trim(swidth);
+#ifdef DOLOG
+	log("PRV WIDTH " + swidth + "\n");
+#endif
 	int width = (int)strtod(swidth.c_str(), NULL);
-	if (!fgets(buff, 65536, stdin))
+	if (!fgets(buff, 65536, stdin)) {
+		#ifdef DOLOG
+				log("UNABLE TO DO PREVIEW HEIGHT\n");
+		#endif
 		return false;
+	}
 	std::string sheight(buff);
 	sheight = trim(sheight);
+#ifdef DOLOG
+	log("PRV HEIGHT " + sheight + "\n");
+#endif
 	int height = (int)strtod(sheight.c_str(), NULL);
 	//--------------------------------------------------------------------------------
 	FPDF_BITMAP bitmap = FPDFBitmap_Create(width, height, 1); // ALPHA
@@ -481,8 +574,10 @@ bool preview()
 			tmpBuff[c + 3] = buffer[ip + 2];
 		}
 	}
-	fwrite(tmpBuff, 4, width*height, stdout);
-	fflush(stdout);
+	#ifdef DOLOG
+	log("PRV DONE " + std::to_string(width*height*4) + " BYTES\n");
+	#endif
+	flushwrite(tmpBuff, 4*width*height, stdout);
 	free(tmpBuff);
 	FPDFBitmap_Destroy(bitmap);
 	return true;
@@ -492,15 +587,24 @@ int main(int argc, const char* argv[])
 {
 #ifdef _WIN32
 	_setmode(_fileno(stdout), _O_BINARY);
+	_setmode(_fileno(stdin), _O_BINARY);
 #endif
 	FPDF_InitLibrary();
 	//64k read line bufer
 	bitmap = FPDFBitmap_Create(bWidth, bHeight, 1); // USE ALPHA
 	while (true)
 	{
-		if (!fgets(buff, 65536, stdin))
+		if (!fgets(buff, 65536, stdin)) 
+		{
+			#ifdef DOLOG
+				log("CONNECTION LOST\n");
+			#endif
 			break;
+		}			
 		std::string cmd(buff);
+		#ifdef DOLOG
+			log("\nCOMMAND '"+trim(cmd)+"'\n");
+		#endif
 		cmd = trim(cmd);
 		if (cmd == "PREVIEW") {
 			if (!preview())
@@ -512,6 +616,10 @@ int main(int argc, const char* argv[])
 		}
 		else if (cmd == "INFO") {
 			if (!info())
+				break;
+		}
+		else if (cmd == "PING") {
+			if (!ping())
 				break;
 		}
 	}
