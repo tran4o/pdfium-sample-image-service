@@ -11,11 +11,11 @@
 
 //#define DOLOG
 
-#include "../fpdfsdk/include/fpdf_dataavail.h"
-#include "../fpdfsdk/include/fpdf_ext.h"
-#include "../fpdfsdk/include/fpdfformfill.h"
-#include "../fpdfsdk/include/fpdftext.h"
-#include "../fpdfsdk/include/fpdfview.h"
+#include "../public/fpdf_dataavail.h"
+#include "../public/fpdf_ext.h"
+#include "../public/fpdf_formfill.h"
+#include "../public/fpdf_text.h"
+#include "../public/fpdfview.h"
 #include "../core/include/fxcrt/fx_system.h"
 #include "v8/include/v8.h"
 #include "v8/include/libplatform/libplatform.h"
@@ -123,7 +123,7 @@ int FileLoaderGetBlock(void* param, unsigned long pos, unsigned char* pBuf, unsi
 	fread(pBuf, 1, size, pLoader->file);
 	return 1;
 }
-bool FileLoaderIsDataAvail(FX_FILEAVAIL* pThis, size_t offset, size_t size) { return true; }
+FPDF_BOOL FileLoaderIsDataAvail(FX_FILEAVAIL* pThis, size_t offset, size_t size) { return true; }
 void FileLoaderAddSegment(FX_DOWNLOADHINTS* pThis, size_t offset, size_t size) {}
 //---------------------------------------------------------------------------------------------------------------------------------------------
 class PageCacheEntry;
